@@ -24,6 +24,9 @@ import Data.Semigroup (Semigroup)
 newtype Position = Position (V2 Float) deriving Show
 instance Component Position where type Storage Position = Map Position
 
+newtype PosArr = PosArr [Position] deriving Show
+instance Component PosArr where type Storage PosArr = Map PosArr
+
 data Dir = North | South | East | West deriving (Show, Eq)
 
 newtype Direction = Direction Dir deriving Show
@@ -40,7 +43,7 @@ instance Semigroup Score where (<>) = (+)
 instance Monoid Score where mempty = 0
 instance Component Score where type Storage Score = Global Score
 
-makeWorld "World" [''Position, ''Direction, ''Player, ''Food, ''Score, ''Camera]
+makeWorld "World" [''Position, ''PosArr, ''Direction, ''Player, ''Food, ''Score, ''Camera]
 
 type System' a = System World a
 
@@ -57,16 +60,32 @@ scorePos  = V2 xmin (-170)
 
 initialize :: System' ()
 initialize = do
-  playerEty <- newEntity (Player, Position playerPos, Direction North)
+  playerEty <- newEntity (Player, PosArr [Position playerPos], Direction North)
   return ()
 
 stepPosition :: Float -> System' ()
-stepPosition dT = cmap updatePosition
+stepPosition dT = cmap updatePosArr
     where
-        updatePosition (Player, Position p, Direction East) = Position (p + dT *^ V2 (-playerSpeed) 0)
-        updatePosition (Player, Position p, Direction West) = Position (p + dT *^ V2 playerSpeed 0)
-        updatePosition (Player, Position p, Direction North) = Position (p + dT *^ V2 0 playerSpeed)
-        updatePosition (Player, Position p, Direction South) = Position (p + dT *^ V2 0 (-playerSpeed))
+        update (Player, PosArr arr, ) =
+
+        updatePosArr (Player, PosArr pArr, Direction East) = PosArr $ trans <$> pArr
+            where
+                trans :: Position -> Position
+                trans (Position p) = Position (p + dT *^ V2 (-playerSpeed) 0)
+        updatePosArr (Player, PosArr pArr, Direction West) = PosArr $ trans <$> pArr
+            where
+                trans :: Position -> Position
+                trans (Position p) = Position (p + dT *^ V2 playerSpeed 0)
+
+        updatePosArr (Player, PosArr pArr, Direction North) = PosArr $ trans <$> pArr
+            where
+                trans :: Position -> Position
+                trans (Position p) = Position (p + dT *^ V2 0 playerSpeed)
+
+        updatePosArr (Player, PosArr pArr, Direction South) = PosArr $ trans <$> pArr
+            where
+                trans :: Position -> Position
+                trans (Position p) = Position (p + dT *^ V2 0 (-playerSpeed))
 
 clampPlayer :: System' ()
 clampPlayer = cmap $ \(Player, Position (V2 x y))
@@ -105,12 +124,12 @@ handleEvent _ = return ()
 translate' :: Position -> Picture -> Picture
 translate' (Position (V2 x y)) = translate x y
 
-triangle :: Picture
-triangle = Line [(0,0),(-0.5,-1),(0.5,-1),(0,0)]
+square :: Picture
+square = Line [(0,0),(0,1),(1,1),(1,0)]
 
 draw :: System' Picture
 draw = do
-  player  <- foldDraw $ \(Player, pos) -> translate' pos . color white  . scale 10 20 $ triangle
+  player  <- foldDraw $ \(Player, PosArr pArr) -> translate' (head pArr) . color white  . scale 10 20 $ square
 
   Score s <- get global
   let score = color white . translate' (Position scorePos) . scale 0.1 0.1 . Text $ "Score: " ++ show s
